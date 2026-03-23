@@ -10,22 +10,18 @@ st.markdown("""
 <style>
 body { background-color: #fafafa; }
 h1 { text-align: center; }
-
 .card {
     padding: 10px;
     border-radius: 12px;
     margin-bottom: 20px;
 }
-
 .portfolio-title {
     text-align: center;
-    font-size: 28px;
-    margin-top: 10px;
+    font-size: 24px;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- HEADER ----------
 st.title("🏺 Suzie’s Pottery")
 
 view_mode = st.radio("View Mode", ["Portfolio", "Admin"], horizontal=True)
@@ -44,7 +40,7 @@ else:
     ])
 
 # =========================================================
-# 🎨 PORTFOLIO VIEW (PUBLIC WEBSITE)
+# 🎨 PORTFOLIO VIEW
 # =========================================================
 if view_mode == "Portfolio":
 
@@ -57,19 +53,14 @@ if view_mode == "Portfolio":
 
             if pd.notna(row["images"]):
                 img_list = row["images"].split("|")
-
-                # Show first image as cover
-                if os.path.exists(img_list[0]):
+                if img_list and os.path.exists(img_list[0]):
                     st.image(img_list[0], use_container_width=True)
 
             st.markdown(f"<div class='portfolio-title'>{row['type']}</div>", unsafe_allow_html=True)
             st.caption(f"{row['forming_method']} • {row['clay']}")
 
 # =========================================================
-# ⚙️ ADMIN VIEW (YOUR WORKSPACE)
-# =========================================================
-# =========================================================
-# ⚙️ ADMIN VIEW (CREATE + EDIT)
+# ⚙️ ADMIN VIEW
 # =========================================================
 else:
 
@@ -77,7 +68,7 @@ else:
 
     mode = st.radio("Action", ["Add New", "Edit Existing"], horizontal=True)
 
-    # ---------- ADD NEW ----------
+    # ---------- ADD ----------
     if mode == "Add New":
 
         with st.form("add_form"):
@@ -105,11 +96,12 @@ else:
             img_id = len(df) + 1
             image_paths = []
 
-            for i, img in enumerate(new_images):
-                path = f"images/{img_id}_{i}.png"
-                with open(path, "wb") as f:
-                    f.write(img.getbuffer())
-                image_paths.append(path)
+            if new_images:
+                for i, img in enumerate(new_images):
+                    path = f"images/{img_id}_{i}.png"
+                    with open(path, "wb") as f:
+                        f.write(img.getbuffer())
+                    image_paths.append(path)
 
             days = (finish_date - start_date).days
 
@@ -122,42 +114,39 @@ else:
             df = pd.concat([df, new_row], ignore_index=True)
             df.to_csv("pottery_log.csv", index=False)
 
-            st.success("Piece added!")
+            st.success("Added!")
 
-    # ---------- EDIT EXISTING ----------
+    # ---------- EDIT ----------
     else:
 
         if not df.empty:
 
-            selected_id = st.selectbox("Select Piece to Edit", df["id"])
+            selected_id = st.selectbox("Select Piece", df["id"])
             record = df[df["id"] == selected_id].iloc[0]
 
-            # Show existing images
-            st.write("### Existing Images")
             existing_images = record["images"].split("|") if pd.notna(record["images"]) else []
 
+            st.write("### Existing Images")
             for img in existing_images:
                 if os.path.exists(img):
-                    st.image(img, width=150)
+                    st.image(img, width=120)
 
             with st.form("edit_form"):
                 c1, c2 = st.columns(2)
 
+                types = ["Teapot","Mug","Bowl","Vase"]
+                methods = ["Wheel thrown","Slab hand built","Coiled","Pinched","Thrown and altered"]
+
                 with c1:
-                    piece_type = st.selectbox("Type", ["Teapot","Mug","Bowl","Vase"],
-                                             index=["Teapot","Mug","Bowl","Vase"].index(record["type"]))
-                    forming_method = st.selectbox(
-                        "Forming Method",
-                        ["Wheel thrown","Slab hand built","Coiled","Pinched","Thrown and altered"],
-                        index=["Wheel thrown","Slab hand built","Coiled","Pinched","Thrown and altered"].index(record["forming_method"])
-                    )
+                    piece_type = st.selectbox("Type", types, index=types.index(record["type"]) if record["type"] in types else 0)
+                    forming_method = st.selectbox("Forming Method", methods, index=methods.index(record["forming_method"]) if record["forming_method"] in methods else 0)
                     clay = st.text_input("Clay", record["clay"])
                     glaze = st.text_input("Glaze", record["glaze"])
 
                 with c2:
                     start_date = st.date_input("Start Date", pd.to_datetime(record["start_date"]))
                     finish_date = st.date_input("Finish Date", pd.to_datetime(record["finish_date"]))
-                    new_images = st.file_uploader("Add More Images", accept_multiple_files=True)
+                    new_images = st.file_uploader("Add Images", accept_multiple_files=True)
 
                 notes = st.text_area("Notes", record["notes"])
 
@@ -166,12 +155,12 @@ else:
             if update:
                 image_paths = existing_images.copy()
 
-                # Add new images
-                for i, img in enumerate(new_images):
-                    path = f"images/{selected_id}_new_{i}.png"
-                    with open(path, "wb") as f:
-                        f.write(img.getbuffer())
-                    image_paths.append(path)
+                if new_images:
+                    for i, img in enumerate(new_images):
+                        path = f"images/{selected_id}_new_{i}.png"
+                        with open(path, "wb") as f:
+                            f.write(img.getbuffer())
+                        image_paths.append(path)
 
                 days = (finish_date - start_date).days
 
@@ -185,15 +174,12 @@ else:
 
                 st.success("Updated!")
 
-            # ---------- DELETE ----------
-            if st.button("Delete This Piece"):
+            if st.button("Delete"):
                 df = df[df["id"] != selected_id]
                 df.to_csv("pottery_log.csv", index=False)
-                st.warning("Deleted. Refresh page.")
+                st.warning("Deleted. Refresh.")
 
-
-#--------
-    # ---------- FULL GALLERY ----------
+    # ---------- GALLERY ----------
     st.subheader("📋 Full Gallery")
 
     cols = st.columns(3)
@@ -207,84 +193,7 @@ else:
                         st.image(img_path, use_container_width=True)
 
             st.write(f"**{row['type']}**")
-            st.write(f"{row['forming_method']}")
-            st.write(f"Clay: {row['clay']}")
-            st.write(f"Glaze: {row['glaze']}")
-            st.write(f"Days: {row['days']}")
-            st.caption(row["notes"])
-
-    st.subheader("➕ Add New Piece")
-
-    with st.form("add_form"):
-        c1, c2 = st.columns(2)
-
-        with c1:
-            piece_type = st.selectbox("Type", ["Teapot","Mug","Bowl","Vase"])
-            forming_method = st.selectbox(
-                "Forming Method",
-                ["Wheel thrown","Slab hand built","Coiled","Pinched","Thrown and altered"]
-            )
-            clay = st.text_input("Clay")
-            glaze = st.text_input("Glaze")
-
-        with c2:
-            start_date = st.date_input("Start Date", date.today())
-            finish_date = st.date_input("Finish Date", date.today())
-            images = st.file_uploader("Upload Images", accept_multiple_files=True)
-
-        notes = st.text_area("Notes")
-
-        submit = st.form_submit_button("Save")
-
-    if submit:
-        img_id = len(df) + 1
-        image_paths = []
-
-        for i, img in enumerate(images):
-            path = f"images/{img_id}_{i}.png"
-            with open(path, "wb") as f:
-                f.write(img.getbuffer())
-            image_paths.append(path)
-
-        days = (finish_date - start_date).days
-
-        new_row = pd.DataFrame([[
-            img_id, start_date, finish_date, days,
-            piece_type, forming_method, clay, glaze,
-            "|".join(image_paths), notes
-        ]], columns=df.columns)
-
-        df = pd.concat([df, new_row], ignore_index=True)
-        df.to_csv("pottery_log.csv", index=False)
-
-        st.success("Saved!")
-
-    # ---------- DELETE ----------
-    st.subheader("✏️ Manage Pieces")
-
-    if not df.empty:
-        selected_id = st.selectbox("Select Piece ID", df["id"])
-
-        if st.button("Delete"):
-            df = df[df["id"] != selected_id]
-            df.to_csv("pottery_log.csv", index=False)
-            st.warning("Deleted. Refresh page.")
-
-    # ---------- FULL GALLERY ----------
-    st.subheader("📋 Full Gallery")
-
-    cols = st.columns(3)
-
-    for i, row in df.iterrows():
-        with cols[i % 3]:
-
-            if pd.notna(row["images"]):
-                for img_path in row["images"].split("|"):
-                    if os.path.exists(img_path):
-                        st.image(img_path, use_container_width=True)
-
-            st.write(f"**{row['type']}**")
-            st.write(f"{row['forming_method']}")
+            st.write(row["forming_method"])
             st.write(f"Clay: {row['clay']}")
             st.write(f"Glaze: {row['glaze']}")
             st.write(f"Days: {row['days']}")
