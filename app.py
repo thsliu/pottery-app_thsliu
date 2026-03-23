@@ -3,76 +3,97 @@ import pandas as pd
 import os
 from datetime import date
 
-# Setup
 st.set_page_config(layout="wide")
-st.title("🏺 My Pottery Gallery")
 
-# Ensure image folder exists
+# ---------- STYLE (modern look) ----------
+st.markdown("""
+<style>
+h1, h2, h3 { text-align: center; }
+.block-container { padding-top: 2rem; }
+.card {
+    padding: 10px;
+    border-radius: 12px;
+    box-shadow: 0px 2px 8px rgba(0,0,0,0.1);
+    margin-bottom: 15px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.title("🏺 Suzie’s Pottery Studio")
+
+# ---------- SETUP ----------
 if not os.path.exists("images"):
     os.makedirs("images")
 
-# Load data
 if os.path.exists("pottery_log.csv"):
     df = pd.read_csv("pottery_log.csv")
 else:
     df = pd.DataFrame(columns=[
-        "id","start_date","finish_date","type","forming_method",
-        "clay","image","notes"
+        "id","start_date","finish_date","days",
+        "type","forming_method","clay","glaze",
+        "outcome","images","notes"
     ])
 
-# --- Sidebar Filters ---
+# ---------- SIDEBAR FILTER ----------
 st.sidebar.header("🔍 Filter")
 
 type_filter = st.sidebar.multiselect(
-    "Type", options=df["type"].dropna().unique(), default=df["type"].dropna().unique()
+    "Type", df["type"].dropna().unique(), default=df["type"].dropna().unique()
 )
 
-method_filter = st.sidebar.multiselect(
-    "Forming Method",
-    options=df["forming_method"].dropna().unique(),
-    default=df["forming_method"].dropna().unique()
+outcome_filter = st.sidebar.multiselect(
+    "Outcome", df["outcome"].dropna().unique(), default=df["outcome"].dropna().unique()
 )
 
 filtered_df = df[
     df["type"].isin(type_filter) &
-    df["forming_method"].isin(method_filter)
+    df["outcome"].isin(outcome_filter)
 ] if not df.empty else df
 
-# --- Add New Piece ---
+# ---------- ADD ENTRY ----------
 st.subheader("➕ Add New Piece")
 
-with st.form("add_piece"):
-    col1, col2 = st.columns(2)
+with st.form("add_form"):
+    c1, c2 = st.columns(2)
 
-    with col1:
-        piece_type = st.selectbox("Type", ["Teapot","Mug","Bowl","Vase"])
+    with c1:
+        piece_type = st.selectbox("Type", ["Teapot","Mug","Bowl","Vase"],"plate","container","decorate")
         forming_method = st.selectbox(
             "Forming Method",
-            ["Wheel thrown", "Slab hand built", "Coiled", "Pinched", "Thrown and altered"]
+            ["Wheel thrown","Slab hand built","Coiled","Pinched","Thrown and altered"]
         )
         clay = st.text_input("Clay")
+        glaze = st.text_input("Glaze")
 
-    with col2:
+    with c2:
         start_date = st.date_input("Start Date", date.today())
         finish_date = st.date_input("Finish Date", date.today())
-        image_file = st.file_uploader("Upload Image", type=["jpg","png"])
+        outcome = st.selectbox(
+            "Outcome", ["Success","Cracked","Warped","Learning"]
+        )
+        images = st.file_uploader("Upload Images", accept_multiple_files=True)
 
     notes = st.text_area("Notes")
 
-    submitted = st.form_submit_button("Save")
+    submit = st.form_submit_button("Save")
 
-if submitted and image_file is not None:
+if submit:
     img_id = len(df) + 1
-    image_path = f"images/{img_id}.png"
+    image_paths = []
 
-    # Save image
-    with open(image_path, "wb") as f:
-        f.write(image_file.getbuffer())
+    for i, img in enumerate(images):
+        path = f"images/{img_id}_{i}.png"
+        with open(path, "wb") as f:
+            f.write(img.getbuffer())
+        image_paths.append(path)
 
-    # Save data
+    # Calculate days
+    days = (finish_date - start_date).days
+
     new_row = pd.DataFrame([[
-        img_id, start_date, finish_date, piece_type,
-        forming_method, clay, image_path, notes
+        img_id, start_date, finish_date, days,
+        piece_type, forming_method, clay, glaze,
+        outcome, "|".join(image_paths), notes
     ]], columns=df.columns)
 
     df = pd.concat([df, new_row], ignore_index=True)
@@ -80,18 +101,49 @@ if submitted and image_file is not None:
 
     st.success("Saved!")
 
-# --- Gallery ---
+# ---------- EDIT / DELETE ----------
+st.subheader("✏️ Manage Pieces")
+
+if not df.empty:
+    selected_id = st.selectbox("Select Piece ID", df["id"])
+
+    record = df[df["id"] == selected_id].iloc[0]
+
+    if st.button("Delete"):
+        df = df[df["id"] != selected_id]
+        df.to_csv("pottery_log.csv", index=False)
+        st.warning("Deleted. Refresh page.")
+
+# ---------- GALLERY ----------
 st.subheader("🎨 Gallery")
 
 cols = st.columns(3)
 
 for i, row in filtered_df.iterrows():
     with cols[i % 3]:
-        if os.path.exists(row["image"]):
-            st.image(row["image"], use_container_width=True)
-        st.write(f"**{row['type']}**")
-        st.write(f"Method: {row['forming_method']}")
-        st.write(f"Clay: {row['clay']}")
-        st.write(f"Start: {row['start_date']}")
-        st.write(f"Finish: {row['finish_date']}")
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+
+        # Multiple images
+        if pd.notna(row["images"]):
+            for img_path in row["images"].split("|"):
+                if os.path.exists(img_path):
+                    st.image(img_path, use_container_width=True)
+
+        st.markdown(f"### {row['type']}")
+        st.write(f"**Method:** {row['forming_method']}")
+        st.write(f"**Clay:** {row['clay']}")
+        st.write(f"**Glaze:** {row['glaze']}")
+        st.write(f"**Outcome:** {row['outcome']}")
+        st.write(f"**Days:** {row['days']}")
         st.caption(row["notes"])
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# ---------- STATS ----------
+st.subheader("📊 Insights")
+
+if not filtered_df.empty:
+    success_rate = (filtered_df["outcome"] == "Success").mean()
+    st.metric("Success Rate", f"{success_rate:.0%}")
+
+    st.bar_chart(filtered_df["outcome"].value_counts())
