@@ -14,6 +14,7 @@ h1 { text-align: center; }
 .portfolio-title {
     text-align: center;
     font-size: 20px;
+    font-weight: bold;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -24,7 +25,7 @@ view_mode = st.radio("View Mode", ["Portfolio", "Admin"], horizontal=True)
 
 # ---------- SETUP ----------
 COLUMNS = [
-    "id","start_date","finish_date","days",
+    "id","title","start_date","finish_date","days",
     "type","forming_method","clay","glaze",
     "images","notes"
 ]
@@ -43,12 +44,17 @@ if os.path.exists("pottery_log.csv"):
 else:
     df = pd.DataFrame(columns=COLUMNS)
 
-# Session state for detail view
+# Ensure new column exists (for old CSV compatibility)
+for col in COLUMNS:
+    if col not in df.columns:
+        df[col] = ""
+
+# Session state
 if "selected_piece" not in st.session_state:
     st.session_state.selected_piece = None
 
 # =========================================================
-# 🎨 PORTFOLIO VIEW (PRO)
+# 🎨 PORTFOLIO VIEW
 # =========================================================
 if view_mode == "Portfolio":
 
@@ -63,7 +69,7 @@ if view_mode == "Portfolio":
             st.session_state.selected_piece = None
             st.rerun()
 
-        st.markdown(f"# {piece['type']}")
+        st.markdown(f"# {piece['title'] if piece['title'] else piece['type']}")
 
         # Show all images
         if pd.notna(piece["images"]):
@@ -72,6 +78,7 @@ if view_mode == "Portfolio":
                     st.image(img, use_container_width=True)
 
         st.markdown("---")
+        st.write(f"**Type:** {piece['type']}")
         st.write(f"**Method:** {piece['forming_method']}")
         st.write(f"**Clay:** {piece['clay']}")
         st.write(f"**Glaze:** {piece['glaze']}")
@@ -90,14 +97,16 @@ if view_mode == "Portfolio":
                 if pd.notna(row["images"]):
                     img_list = row["images"].split("|")
 
-                    if os.path.exists(img_list[0]):
+                    if img_list and os.path.exists(img_list[0]):
                         if st.button("View", key=f"view_{row['id']}"):
                             st.session_state.selected_piece = row["id"]
                             st.rerun()
 
                         st.image(img_list[0], use_container_width=True)
 
-                st.markdown(f"<div class='portfolio-title'>{row['type']}</div>", unsafe_allow_html=True)
+                title_display = row["title"] if row["title"] else row["type"]
+
+                st.markdown(f"<div class='portfolio-title'>{title_display}</div>", unsafe_allow_html=True)
                 st.caption(row["forming_method"])
 
 # =========================================================
@@ -107,7 +116,7 @@ else:
 
     st.subheader("⚙️ Manage Your Pieces")
 
-    mode = st.radio("Action", ["Add New", "Edit Existing"], horizontal=True)
+    mode = st.radio("Action", ["Add New", "Edit Existing", "Delete"], horizontal=True)
 
     # ---------- ADD ----------
     if mode == "Add New":
@@ -116,6 +125,7 @@ else:
             c1, c2 = st.columns(2)
 
             with c1:
+                title = st.text_input("Piece Title")
                 piece_type = st.selectbox("Type", ["Teapot","Mug","Bowl","Vase"])
                 forming_method = st.selectbox(
                     "Forming Method",
@@ -147,10 +157,10 @@ else:
             days = (finish_date - start_date).days
 
             new_row = pd.DataFrame([[
-                img_id, start_date, finish_date, days,
+                img_id, title, start_date, finish_date, days,
                 piece_type, forming_method, clay, glaze,
                 "|".join(image_paths), notes
-            ]], columns=df.columns)
+            ]], columns=COLUMNS)
 
             df = pd.concat([df, new_row], ignore_index=True)
             df.to_csv("pottery_log.csv", index=False)
@@ -158,7 +168,7 @@ else:
             st.success("Added!")
 
     # ---------- EDIT ----------
-    else:
+    elif mode == "Edit Existing":
 
         if not df.empty:
 
@@ -179,6 +189,7 @@ else:
                 methods = ["Wheel thrown","Slab hand built","Coiled","Pinched","Thrown and altered"]
 
                 with c1:
+                    title = st.text_input("Piece Title", record["title"])
                     piece_type = st.selectbox("Type", types, index=types.index(record["type"]) if record["type"] in types else 0)
                     forming_method = st.selectbox("Forming Method", methods, index=methods.index(record["forming_method"]) if record["forming_method"] in methods else 0)
                     clay = st.text_input("Clay", record["clay"])
@@ -206,7 +217,7 @@ else:
                 days = (finish_date - start_date).days
 
                 df.loc[df["id"] == selected_id] = [
-                    selected_id, start_date, finish_date, days,
+                    selected_id, title, start_date, finish_date, days,
                     piece_type, forming_method, clay, glaze,
                     "|".join(image_paths), notes
                 ]
@@ -215,10 +226,31 @@ else:
 
                 st.success("Updated!")
 
-            if st.button("Delete"):
-                df = df[df["id"] != selected_id]
-                df.to_csv("pottery_log.csv", index=False)
-                st.warning("Deleted. Refresh.")
+    # ---------- DELETE ----------
+    elif mode == "Delete":
+
+        if not df.empty:
+
+            st.write("### Select a piece to delete")
+
+            # Show readable labels
+            df["display"] = df.apply(
+                lambda x: f"{x['id']} - {x['title'] if x['title'] else x['type']}",
+                axis=1
+            )
+
+            selected_display = st.selectbox("Choose Piece", df["display"])
+            selected_id = int(selected_display.split(" - ")[0])
+
+            confirm = st.checkbox("Confirm deletion")
+
+            if st.button("Delete Selected Piece"):
+                if confirm:
+                    df = df[df["id"] != selected_id].drop(columns=["display"])
+                    df.to_csv("pottery_log.csv", index=False)
+                    st.success("Deleted successfully!")
+                else:
+                    st.warning("Please confirm deletion.")
 
     # ---------- GALLERY ----------
     st.subheader("📋 Full Gallery")
@@ -233,7 +265,9 @@ else:
                     if os.path.exists(img_path):
                         st.image(img_path, use_container_width=True)
 
-            st.write(f"**{row['type']}**")
+            title_display = row["title"] if row["title"] else row["type"]
+
+            st.write(f"**{title_display}**")
             st.write(row["forming_method"])
             st.write(f"Clay: {row['clay']}")
             st.write(f"Glaze: {row['glaze']}")
