@@ -5,7 +5,7 @@ from datetime import date
 
 st.set_page_config(layout="wide")
 
-# ---------- STYLE (modern look) ----------
+# ---------- STYLE ----------
 st.markdown("""
 <style>
 h1, h2, h3 { text-align: center; }
@@ -31,7 +31,7 @@ else:
     df = pd.DataFrame(columns=[
         "id","start_date","finish_date","days",
         "type","forming_method","clay","glaze",
-        "outcome","images","notes"
+        "images","notes"
     ])
 
 # ---------- SIDEBAR FILTER ----------
@@ -41,13 +41,8 @@ type_filter = st.sidebar.multiselect(
     "Type", df["type"].dropna().unique(), default=df["type"].dropna().unique()
 )
 
-outcome_filter = st.sidebar.multiselect(
-    "Outcome", df["outcome"].dropna().unique(), default=df["outcome"].dropna().unique()
-)
-
 filtered_df = df[
-    df["type"].isin(type_filter) &
-    df["outcome"].isin(outcome_filter)
+    df["type"].isin(type_filter)
 ] if not df.empty else df
 
 # ---------- ADD ENTRY ----------
@@ -57,7 +52,7 @@ with st.form("add_form"):
     c1, c2 = st.columns(2)
 
     with c1:
-        piece_type = st.selectbox("Type", ["Teapot","Mug","Bowl","Vase"],"plate","container","decorate")
+        piece_type = st.selectbox("Type", ["Teapot","Mug","Bowl","Vase"])
         forming_method = st.selectbox(
             "Forming Method",
             ["Wheel thrown","Slab hand built","Coiled","Pinched","Thrown and altered"]
@@ -68,9 +63,6 @@ with st.form("add_form"):
     with c2:
         start_date = st.date_input("Start Date", date.today())
         finish_date = st.date_input("Finish Date", date.today())
-        outcome = st.selectbox(
-            "Outcome", ["Success","Cracked","Warped","Learning"]
-        )
         images = st.file_uploader("Upload Images", accept_multiple_files=True)
 
     notes = st.text_area("Notes")
@@ -93,7 +85,7 @@ if submit:
     new_row = pd.DataFrame([[
         img_id, start_date, finish_date, days,
         piece_type, forming_method, clay, glaze,
-        outcome, "|".join(image_paths), notes
+        "|".join(image_paths), notes
     ]], columns=df.columns)
 
     df = pd.concat([df, new_row], ignore_index=True)
@@ -101,13 +93,11 @@ if submit:
 
     st.success("Saved!")
 
-# ---------- EDIT / DELETE ----------
+# ---------- DELETE ----------
 st.subheader("✏️ Manage Pieces")
 
 if not df.empty:
     selected_id = st.selectbox("Select Piece ID", df["id"])
-
-    record = df[df["id"] == selected_id].iloc[0]
 
     if st.button("Delete"):
         df = df[df["id"] != selected_id]
@@ -123,7 +113,6 @@ for i, row in filtered_df.iterrows():
     with cols[i % 3]:
         st.markdown('<div class="card">', unsafe_allow_html=True)
 
-        # Multiple images
         if pd.notna(row["images"]):
             for img_path in row["images"].split("|"):
                 if os.path.exists(img_path):
@@ -133,17 +122,7 @@ for i, row in filtered_df.iterrows():
         st.write(f"**Method:** {row['forming_method']}")
         st.write(f"**Clay:** {row['clay']}")
         st.write(f"**Glaze:** {row['glaze']}")
-        st.write(f"**Outcome:** {row['outcome']}")
         st.write(f"**Days:** {row['days']}")
         st.caption(row["notes"])
 
         st.markdown('</div>', unsafe_allow_html=True)
-
-# ---------- STATS ----------
-st.subheader("📊 Insights")
-
-if not filtered_df.empty:
-    success_rate = (filtered_df["outcome"] == "Success").mean()
-    st.metric("Success Rate", f"{success_rate:.0%}")
-
-    st.bar_chart(filtered_df["outcome"].value_counts())
