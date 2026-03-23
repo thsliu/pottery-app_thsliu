@@ -8,18 +8,27 @@ st.set_page_config(layout="wide")
 # ---------- STYLE ----------
 st.markdown("""
 <style>
-h1, h2, h3 { text-align: center; }
-.block-container { padding-top: 2rem; }
+body { background-color: #fafafa; }
+h1 { text-align: center; }
+
 .card {
     padding: 10px;
     border-radius: 12px;
-    box-shadow: 0px 2px 8px rgba(0,0,0,0.1);
-    margin-bottom: 15px;
+    margin-bottom: 20px;
+}
+
+.portfolio-title {
+    text-align: center;
+    font-size: 28px;
+    margin-top: 10px;
 }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🏺 Suzie’s Pottery Studio")
+# ---------- HEADER ----------
+st.title("🏺 Suzie’s Pottery")
+
+view_mode = st.radio("View Mode", ["Portfolio", "Admin"], horizontal=True)
 
 # ---------- SETUP ----------
 if not os.path.exists("images"):
@@ -34,95 +43,106 @@ else:
         "images","notes"
     ])
 
-# ---------- SIDEBAR FILTER ----------
-st.sidebar.header("🔍 Filter")
+# =========================================================
+# 🎨 PORTFOLIO VIEW (PUBLIC WEBSITE)
+# =========================================================
+if view_mode == "Portfolio":
 
-type_filter = st.sidebar.multiselect(
-    "Type", df["type"].dropna().unique(), default=df["type"].dropna().unique()
-)
+    st.markdown("### Handmade Pottery Collection")
 
-filtered_df = df[
-    df["type"].isin(type_filter)
-] if not df.empty else df
+    cols = st.columns(3)
 
-# ---------- ADD ENTRY ----------
-st.subheader("➕ Add New Piece")
+    for i, row in df.iterrows():
+        with cols[i % 3]:
 
-with st.form("add_form"):
-    c1, c2 = st.columns(2)
+            if pd.notna(row["images"]):
+                img_list = row["images"].split("|")
 
-    with c1:
-        piece_type = st.selectbox("Type", ["Teapot","Mug","Bowl","Vase"])
-        forming_method = st.selectbox(
-            "Forming Method",
-            ["Wheel thrown","Slab hand built","Coiled","Pinched","Thrown and altered"]
-        )
-        clay = st.text_input("Clay")
-        glaze = st.text_input("Glaze")
+                # Show first image as cover
+                if os.path.exists(img_list[0]):
+                    st.image(img_list[0], use_container_width=True)
 
-    with c2:
-        start_date = st.date_input("Start Date", date.today())
-        finish_date = st.date_input("Finish Date", date.today())
-        images = st.file_uploader("Upload Images", accept_multiple_files=True)
+            st.markdown(f"<div class='portfolio-title'>{row['type']}</div>", unsafe_allow_html=True)
+            st.caption(f"{row['forming_method']} • {row['clay']}")
 
-    notes = st.text_area("Notes")
+# =========================================================
+# ⚙️ ADMIN VIEW (YOUR WORKSPACE)
+# =========================================================
+else:
 
-    submit = st.form_submit_button("Save")
+    st.subheader("➕ Add New Piece")
 
-if submit:
-    img_id = len(df) + 1
-    image_paths = []
+    with st.form("add_form"):
+        c1, c2 = st.columns(2)
 
-    for i, img in enumerate(images):
-        path = f"images/{img_id}_{i}.png"
-        with open(path, "wb") as f:
-            f.write(img.getbuffer())
-        image_paths.append(path)
+        with c1:
+            piece_type = st.selectbox("Type", ["Teapot","Mug","Bowl","Vase"])
+            forming_method = st.selectbox(
+                "Forming Method",
+                ["Wheel thrown","Slab hand built","Coiled","Pinched","Thrown and altered"]
+            )
+            clay = st.text_input("Clay")
+            glaze = st.text_input("Glaze")
 
-    # Calculate days
-    days = (finish_date - start_date).days
+        with c2:
+            start_date = st.date_input("Start Date", date.today())
+            finish_date = st.date_input("Finish Date", date.today())
+            images = st.file_uploader("Upload Images", accept_multiple_files=True)
 
-    new_row = pd.DataFrame([[
-        img_id, start_date, finish_date, days,
-        piece_type, forming_method, clay, glaze,
-        "|".join(image_paths), notes
-    ]], columns=df.columns)
+        notes = st.text_area("Notes")
 
-    df = pd.concat([df, new_row], ignore_index=True)
-    df.to_csv("pottery_log.csv", index=False)
+        submit = st.form_submit_button("Save")
 
-    st.success("Saved!")
+    if submit:
+        img_id = len(df) + 1
+        image_paths = []
 
-# ---------- DELETE ----------
-st.subheader("✏️ Manage Pieces")
+        for i, img in enumerate(images):
+            path = f"images/{img_id}_{i}.png"
+            with open(path, "wb") as f:
+                f.write(img.getbuffer())
+            image_paths.append(path)
 
-if not df.empty:
-    selected_id = st.selectbox("Select Piece ID", df["id"])
+        days = (finish_date - start_date).days
 
-    if st.button("Delete"):
-        df = df[df["id"] != selected_id]
+        new_row = pd.DataFrame([[
+            img_id, start_date, finish_date, days,
+            piece_type, forming_method, clay, glaze,
+            "|".join(image_paths), notes
+        ]], columns=df.columns)
+
+        df = pd.concat([df, new_row], ignore_index=True)
         df.to_csv("pottery_log.csv", index=False)
-        st.warning("Deleted. Refresh page.")
 
-# ---------- GALLERY ----------
-st.subheader("🎨 Gallery")
+        st.success("Saved!")
 
-cols = st.columns(3)
+    # ---------- DELETE ----------
+    st.subheader("✏️ Manage Pieces")
 
-for i, row in filtered_df.iterrows():
-    with cols[i % 3]:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
+    if not df.empty:
+        selected_id = st.selectbox("Select Piece ID", df["id"])
 
-        if pd.notna(row["images"]):
-            for img_path in row["images"].split("|"):
-                if os.path.exists(img_path):
-                    st.image(img_path, use_container_width=True)
+        if st.button("Delete"):
+            df = df[df["id"] != selected_id]
+            df.to_csv("pottery_log.csv", index=False)
+            st.warning("Deleted. Refresh page.")
 
-        st.markdown(f"### {row['type']}")
-        st.write(f"**Method:** {row['forming_method']}")
-        st.write(f"**Clay:** {row['clay']}")
-        st.write(f"**Glaze:** {row['glaze']}")
-        st.write(f"**Days:** {row['days']}")
-        st.caption(row["notes"])
+    # ---------- FULL GALLERY ----------
+    st.subheader("📋 Full Gallery")
 
-        st.markdown('</div>', unsafe_allow_html=True)
+    cols = st.columns(3)
+
+    for i, row in df.iterrows():
+        with cols[i % 3]:
+
+            if pd.notna(row["images"]):
+                for img_path in row["images"].split("|"):
+                    if os.path.exists(img_path):
+                        st.image(img_path, use_container_width=True)
+
+            st.write(f"**{row['type']}**")
+            st.write(f"{row['forming_method']}")
+            st.write(f"Clay: {row['clay']}")
+            st.write(f"Glaze: {row['glaze']}")
+            st.write(f"Days: {row['days']}")
+            st.caption(row["notes"])
