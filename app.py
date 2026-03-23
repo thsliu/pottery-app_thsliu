@@ -10,14 +10,10 @@ st.markdown("""
 <style>
 body { background-color: #fafafa; }
 h1 { text-align: center; }
-.card {
-    padding: 10px;
-    border-radius: 12px;
-    margin-bottom: 20px;
-}
+
 .portfolio-title {
     text-align: center;
-    font-size: 24px;
+    font-size: 20px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -27,37 +23,82 @@ st.title("🏺 Suzie’s Pottery")
 view_mode = st.radio("View Mode", ["Portfolio", "Admin"], horizontal=True)
 
 # ---------- SETUP ----------
+COLUMNS = [
+    "id","start_date","finish_date","days",
+    "type","forming_method","clay","glaze",
+    "images","notes"
+]
+
 if not os.path.exists("images"):
     os.makedirs("images")
 
+# Safe CSV loading
 if os.path.exists("pottery_log.csv"):
-    df = pd.read_csv("pottery_log.csv")
+    try:
+        df = pd.read_csv("pottery_log.csv")
+        if df.empty:
+            df = pd.DataFrame(columns=COLUMNS)
+    except:
+        df = pd.DataFrame(columns=COLUMNS)
 else:
-    df = pd.DataFrame(columns=[
-        "id","start_date","finish_date","days",
-        "type","forming_method","clay","glaze",
-        "images","notes"
-    ])
+    df = pd.DataFrame(columns=COLUMNS)
+
+# Session state for detail view
+if "selected_piece" not in st.session_state:
+    st.session_state.selected_piece = None
 
 # =========================================================
-# 🎨 PORTFOLIO VIEW
+# 🎨 PORTFOLIO VIEW (PRO)
 # =========================================================
 if view_mode == "Portfolio":
 
     st.markdown("### Handmade Pottery Collection")
 
-    cols = st.columns(3)
+    # -------- DETAIL VIEW --------
+    if st.session_state.selected_piece is not None:
 
-    for i, row in df.iterrows():
-        with cols[i % 3]:
+        piece = df[df["id"] == st.session_state.selected_piece].iloc[0]
 
-            if pd.notna(row["images"]):
-                img_list = row["images"].split("|")
-                if img_list and os.path.exists(img_list[0]):
-                    st.image(img_list[0], use_container_width=True)
+        if st.button("⬅ Back to Gallery"):
+            st.session_state.selected_piece = None
+            st.rerun()
 
-            st.markdown(f"<div class='portfolio-title'>{row['type']}</div>", unsafe_allow_html=True)
-            st.caption(f"{row['forming_method']} • {row['clay']}")
+        st.markdown(f"# {piece['type']}")
+
+        # Show all images
+        if pd.notna(piece["images"]):
+            for img in piece["images"].split("|"):
+                if os.path.exists(img):
+                    st.image(img, use_container_width=True)
+
+        st.markdown("---")
+        st.write(f"**Method:** {piece['forming_method']}")
+        st.write(f"**Clay:** {piece['clay']}")
+        st.write(f"**Glaze:** {piece['glaze']}")
+
+        with st.expander("Details"):
+            st.write(piece["notes"])
+
+    # -------- GALLERY --------
+    else:
+
+        cols = st.columns(3)
+
+        for i, row in df.iterrows():
+            with cols[i % 3]:
+
+                if pd.notna(row["images"]):
+                    img_list = row["images"].split("|")
+
+                    if os.path.exists(img_list[0]):
+                        if st.button("View", key=f"view_{row['id']}"):
+                            st.session_state.selected_piece = row["id"]
+                            st.rerun()
+
+                        st.image(img_list[0], use_container_width=True)
+
+                st.markdown(f"<div class='portfolio-title'>{row['type']}</div>", unsafe_allow_html=True)
+                st.caption(row["forming_method"])
 
 # =========================================================
 # ⚙️ ADMIN VIEW
